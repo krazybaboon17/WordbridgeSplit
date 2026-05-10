@@ -1,9 +1,13 @@
 {
   "version": 2,
-  "buildCommand": "uv python install 3.11 && uv venv --python 3.11 && uv pip install --python .venv/bin/python -r requirements.txt && rm -rf .vercel_python_packages && PYTHONPATH='' .venv/bin/python -m reflex export --frontend-only --no-zip && mv .web/_static out",
-  "outputDirectory": "out",
-  "framework": null
+  "outputDirectory": "frontend_out",
+  "buildCommand": "",
+  "framework": null,
+  "rewrites": [
+    { "source": "/(.*)", "destination": "/index.html" }
+  ]
 }
+
 
 
 
