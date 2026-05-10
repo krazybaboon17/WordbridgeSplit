@@ -1,0 +1,14 @@
+.git
+.github
+.web
+__pycache__
+*.pyc
+*.pyo
+*.pyd
+.db
+.env
+.venv
+venv
+node_modules
+frontend.zip
+backend.zip
