@@ -1,7 +1,8 @@
 {
   "version": 2,
-  "buildCommand": "python3 -m pip install -r requirements.txt && python3 -m reflex export --frontend-only --no-zip && mv .web/_static out",
+  "buildCommand": "python3 -m venv venv && source venv/bin/activate && pip install -r requirements.txt && python3 -m reflex export --frontend-only --no-zip && mv .web/_static out",
   "outputDirectory": "out",
   "framework": null
 }
+
 
