@@ -337,37 +337,20 @@ class State(rx.State):
         except Exception:
             self.feedback = "API Error"
 
-    async def copy_share_score(self):
+    async def copy_challenge(self):
         start = self.wordPath[0].upper()
         end = self.targetWord.upper()
-        steps = self.score
+        attempts = self.score
         
-        emojis = "🟩" * 5
-        
-        text = f"I got from {start} to {end} in {steps} steps! Try it for yourself at wordbridge.one\n{emojis}"
+        text = f"I got from {start} to {end} in {attempts} attempts! Try for yourself at https://wordbridge.one"
         yield rx.set_clipboard(text)
-        self.copiedFeedback = "Score Copied!"
-        yield
-        await asyncio.sleep(2)
-        self.copiedFeedback = ""
-
-    def get_challenge_url(self) -> str:
-        base_url = "https://wordbridge.one/"
-        
-        start = urllib.parse.quote(self.wordPath[0])
-        end = urllib.parse.quote(self.targetWord)
-        return f"{base_url}?start={start}&end={end}"
-
-    async def copy_challenge_link(self):
-        url = self.get_challenge_url()
-        yield rx.set_clipboard(url)
-        self.copiedFeedback = "Link Copied!"
+        self.copiedFeedback = "Challenge Copied!"
         yield
         await asyncio.sleep(2)
         self.copiedFeedback = ""
 
     async def check_query_params(self):
-        params = self.router.page.params
+        params = self.router.url.query_parameters
         if params and "start" in params and "end" in params:
             self.customStart = params["start"]
             self.customEnd = params["end"]
@@ -446,18 +429,12 @@ def index() -> rx.Component:
                         width="100%"
                     ),
 
-                    rx.hstack(
+                    rx.box(
                         rx.button(
-                            rx.hstack(rx.icon(tag="share-2", size=16), rx.text("Share Score")),
-                            on_click=State.copy_share_score,
-                            style={"background_color": "#6aaa64", "color": "#fff", "width": "100%", "cursor": "pointer"}
+                            rx.hstack(rx.icon(tag="copy", size=16), rx.text("Copy Challenge")),
+                            on_click=State.copy_challenge,
+                            style={"background_color": "#1a1a1b", "color": "#fff", "width": "100%", "cursor": "pointer", "padding": "1em"}
                         ),
-                        rx.button(
-                            rx.hstack(rx.icon(tag="link", size=16), rx.text("Challenge")),
-                            on_click=State.copy_challenge_link,
-                            style={"background_color": "#1a1a1b", "color": "#fff", "width": "100%", "cursor": "pointer"}
-                        ),
-                        spacing="3",
                         width="100%"
                     ),
                     rx.cond(
