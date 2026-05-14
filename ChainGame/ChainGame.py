@@ -45,6 +45,15 @@ class State(rx.State):
     customError: str = ""
     isLoading: bool = False
     isDailyGame: bool = False
+    copiedFeedback: str = ""
+
+    def setCopiedFeedback(self, val: str):
+        self.copiedFeedback = val
+
+    async def clearCopiedFeedback(self):
+        await asyncio.sleep(2)
+        self.copiedFeedback = ""
+
 
     @rx.var
     def score(self) -> int:
@@ -328,6 +337,45 @@ class State(rx.State):
         except Exception:
             self.feedback = "API Error"
 
+    async def copy_share_score(self):
+        start = self.wordPath[0].upper()
+        end = self.targetWord.upper()
+        steps = self.score
+        
+        emojis = "🟩" * 5
+        
+        text = f"I got from {start} to {end} in {steps} steps! Try it for yourself at wordbridge.one\n{emojis}"
+        yield rx.set_clipboard(text)
+        self.copiedFeedback = "Score Copied!"
+        yield
+        await asyncio.sleep(2)
+        self.copiedFeedback = ""
+
+    def get_challenge_url(self) -> str:
+        base_url = "https://wordbridge.one/"
+        
+        start = urllib.parse.quote(self.wordPath[0])
+        end = urllib.parse.quote(self.targetWord)
+        return f"{base_url}?start={start}&end={end}"
+
+    async def copy_challenge_link(self):
+        url = self.get_challenge_url()
+        yield rx.set_clipboard(url)
+        self.copiedFeedback = "Link Copied!"
+        yield
+        await asyncio.sleep(2)
+        self.copiedFeedback = ""
+
+    async def check_query_params(self):
+        params = self.router.page.params
+        if params and "start" in params and "end" in params:
+            self.customStart = params["start"]
+            self.customEnd = params["end"]
+            await self.startCustomGame()
+            # If we were in instructions modal, close it
+            self.showInstructions = False
+
+
 
 
 
@@ -398,11 +446,31 @@ def index() -> rx.Component:
                         width="100%"
                     ),
 
+                    rx.hstack(
+                        rx.button(
+                            rx.hstack(rx.icon(tag="share-2", size=16), rx.text("Share Score")),
+                            on_click=State.copy_share_score,
+                            style={"background_color": "#6aaa64", "color": "#fff", "width": "100%", "cursor": "pointer"}
+                        ),
+                        rx.button(
+                            rx.hstack(rx.icon(tag="link", size=16), rx.text("Challenge")),
+                            on_click=State.copy_challenge_link,
+                            style={"background_color": "#1a1a1b", "color": "#fff", "width": "100%", "cursor": "pointer"}
+                        ),
+                        spacing="3",
+                        width="100%"
+                    ),
+                    rx.cond(
+                        State.copiedFeedback != "",
+                        rx.text(State.copiedFeedback, style={"color": "#6aaa64", "font_weight": "bold", "font_size": "0.9em"}),
+                        rx.box(height="1.2em")
+                    ),
+
                     rx.dialog.close(
                         rx.button(
                             "New Game",
                             on_click=State.resetGame,
-                            style={"background_color": "#1a1a1b", "color": "#fff", "margin_top": "1em", "width": "100%"}
+                            style={"background_color": "transparent", "color": "#787c7e", "margin_top": "0.5em", "width": "100%", "border": "1px solid #d3d6da", "_hover": {"color": "#1a1a1b", "border": "1px solid #1a1a1b"}}
                         ),
                     ),
                     spacing="4",
@@ -759,4 +827,4 @@ app = rx.App(
         "https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap"
     ]
 )
-app.add_page(index, on_load=[State.openInstructions])
+app.add_page(index, on_load=[State.openInstructions, State.check_query_params])
