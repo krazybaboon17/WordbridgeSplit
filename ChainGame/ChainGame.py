@@ -9,12 +9,6 @@ from wonderwords import RandomWord
 globalPool = []
 apiCache = {}
 
-class VercelAnalytics(rx.Component):
-    library = "@vercel/analytics/react"
-    tag = "Analytics"
-
-vercel_analytics = VercelAnalytics.create
-
 async def fetchDatamuse(url: str, client: httpx.AsyncClient):
     global apiCache
     if url in apiCache:
@@ -803,14 +797,17 @@ def index() -> rx.Component:
             width="100%",
             min_height="100vh",
             background_color="#ffffff",
-        ),
-        vercel_analytics()
+        )
     )
 
 
 app = rx.App(
     stylesheets=[
         "https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap"
+    ],
+    head_components=[
+        rx.el.script("""window.va = window.va || function () { (window.vaq = window.vaq || []).push(arguments); };"""),
+        rx.el.script(src="/_vercel/insights/script.js", defer=True),
     ]
 )
 app.add_page(index, on_load=[State.openInstructions, State.check_query_params])
