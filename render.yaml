@@ -1,0 +1,9 @@
+services:
+  - type: web
+    name: wordbridge-backend
+    env: python
+    buildCommand: pip install -r requirements.txt
+    startCommand: reflex run --env prod --backend-only
+    envVars:
+      - key: PORT
+        value: 8000

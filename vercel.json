@@ -1,16 +1,10 @@
 {
   "version": 2,
-  "outputDirectory": "frontend_out",
-  "buildCommand": "",
+  "installCommand": "pip install -r requirements.txt",
+  "buildCommand": "reflex export --frontend-only --no-zip",
+  "outputDirectory": ".web/_static",
   "framework": null,
   "rewrites": [
     { "source": "/(.*)", "destination": "/index.html" }
   ]
 }
-
-
-
-
-
-
-
