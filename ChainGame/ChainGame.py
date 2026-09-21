@@ -9,6 +9,17 @@ from wonderwords import RandomWord
 globalPool = []
 apiCache = {}
 
+COMMON_NAMES = {
+    "alex", "alice", "anna", "ben", "charlie", "daniel", "david", "emma", "george",
+    "grace", "henry", "jack", "james", "jane", "john", "julia", "liam", "lucas",
+    "mary", "michael", "olivia", "peter", "sam", "sarah", "thomas", "william",
+}
+
+
+def is_playable_word(word: str) -> bool:
+    normalized = word.lower().strip()
+    return normalized.isalpha() and 3 <= len(normalized) <= 14 and normalized not in COMMON_NAMES
+
 async def fetchDatamuse(url: str, client: httpx.AsyncClient):
     global apiCache
     if url in apiCache:
@@ -38,6 +49,7 @@ class State(rx.State):
     lastProximityScore: int = 0
     proximityDirection: str = ""
     targetNeighborhood: dict[str, int] = {}
+    usedWords: list[str] = []
     hasWon: bool = False
     showCustomModal: bool = False
     customStart: str = ""
@@ -92,6 +104,9 @@ class State(rx.State):
         if not start or not end:
             self.customError = "Both fields are required."
             return
+        if not is_playable_word(start) or not is_playable_word(end):
+            self.customError = "Use single words with letters only."
+            return
         if start == end:
             self.customError = "Start and end words must be different."
             return
@@ -101,6 +116,7 @@ class State(rx.State):
         self.inputWord = ""
         self.feedback = ""
         self.wordPath = [start]
+        self.usedWords = [start]
         self.proximityScore = 0
         self.lastProximityScore = 0
         self.proximityDirection = ""
@@ -129,7 +145,7 @@ class State(rx.State):
 
         today = datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%d")
         
-        words = list(RandomWord().filter())
+        words = [word.lower() for word in RandomWord().filter() if is_playable_word(word)]
         words.sort()
         
         rng = random.Random(today)
@@ -141,6 +157,7 @@ class State(rx.State):
         self.inputWord = ""
         self.feedback = ""
         self.wordPath = [start]
+        self.usedWords = [start]
         self.proximityScore = 0
         self.lastProximityScore = 0
         self.proximityDirection = ""
@@ -165,6 +182,7 @@ class State(rx.State):
         self.inputWord = ""
         self.feedback = ""
         self.wordPath = []
+        self.usedWords = []
         self.proximityScore = 0
         self.lastProximityScore = 0
         self.proximityDirection = ""
@@ -192,16 +210,16 @@ class State(rx.State):
             if not globalPool:
                 async with httpx.AsyncClient(timeout=15.0) as client:
                     try:
-                        resp = await client.get("https://random-word-api.herokuapp.com/word?number=5")
+                        resp = await client.get("https://random-word-api.herokuapp.com/word?number=20")
                         if resp.status_code == 200:
-                            anchors = resp.json()
+                            anchors = [word for word in resp.json() if is_playable_word(word)]
                         else:
-                            anchors = RandomWord().random_words(5)
+                            anchors = [word for word in RandomWord().random_words(20) if is_playable_word(word)]
                     except Exception:
-                        anchors = RandomWord().random_words(5)
+                        anchors = [word for word in RandomWord().random_words(20) if is_playable_word(word)]
 
                     anchorResponses = await asyncio.gather(
-                        *[fetchDatamuse(f"https://api.datamuse.com/words?ml={anchor}&max=300&md=f", client) for anchor in anchors]
+                        *[fetchDatamuse(f"https://api.datamuse.com/words?ml={urllib.parse.quote(anchor)}&max=1000&md=f", client) for anchor in anchors]
                     )
 
                     pool = set()
@@ -210,17 +228,19 @@ class State(rx.State):
                             if "tags" in w and any(t.startswith("f:") and float(t[2:]) > 1.0 for t in w["tags"]):
                                 pool.add(w["word"])
 
-                    poolList = list(pool)
+                    poolList = [word for word in pool if is_playable_word(word)]
                     if len(poolList) < 20:
                         try:
-                            resp = await client.get("https://random-word-api.herokuapp.com/word?number=50")
+                            resp = await client.get("https://random-word-api.herokuapp.com/word?number=100")
                             if resp.status_code == 200:
-                                poolList = resp.json()
+                                poolList = [word for word in resp.json() if is_playable_word(word)]
                             else:
                                 raise Exception()
                         except Exception:
-                            poolList = RandomWord().random_words(30)
-                    globalPool = poolList
+                            poolList = [word for word in RandomWord().random_words(120) if is_playable_word(word)]
+                    globalPool = list(dict.fromkeys(poolList))
+                    if len(globalPool) < 2:
+                        raise RuntimeError("Word APIs returned too few playable words")
 
             attempts = 0
             while attempts < 20:
@@ -233,6 +253,7 @@ class State(rx.State):
                 attempts += 1
 
             self.wordPath = [self.previousWord]
+            self.usedWords = [self.previousWord]
             self.feedback = ""
             self.hasWon = False
 
@@ -260,6 +281,16 @@ class State(rx.State):
 
         searchWord = self.inputWord.lower().strip()
         if not searchWord:
+            return
+
+        if not is_playable_word(searchWord):
+            self.inputWord = ""
+            self.feedback = "Use one word"
+            return
+
+        if searchWord in self.usedWords:
+            self.inputWord = ""
+            self.feedback = "Already used"
             return
 
         safeWord = urllib.parse.quote(self.previousWord)
@@ -295,6 +326,7 @@ class State(rx.State):
 
                     if isValid:
                         self.wordPath.append(self.targetWord)
+                        self.usedWords.append(self.targetWord.lower())
                         self.proximityScore = 100
 
                         self.feedback = "You Win"
@@ -317,6 +349,7 @@ class State(rx.State):
 
                 if isAssociated:
                     self.wordPath.append(searchWord)
+                    self.usedWords.append(searchWord)
                     self.previousWord = searchWord
                     self.inputWord = ""
                     self.feedback = "Correct"
@@ -575,6 +608,10 @@ def index() -> rx.Component:
                             "position": "absolute",
                             "left": "50%",
                             "transform": "translateX(-50%)",
+                            "@media screen and (max-width: 600px)": {
+                                "position": "static",
+                                "transform": "none",
+                            },
                         }
                     ),
                     rx.hstack(
@@ -616,6 +653,15 @@ def index() -> rx.Component:
                         right="2em",
                         top="50%",
                         transform="translateY(-50%)",
+                        style={
+                            "@media screen and (max-width: 600px)": {
+                                "position": "static",
+                                "transform": "none",
+                                "width": "100%",
+                                "justify_content": "center",
+                                "flex_wrap": "wrap",
+                            }
+                        },
                     ),
                     position="relative",
                     width="100%",
@@ -625,6 +671,15 @@ def index() -> rx.Component:
                     align_items="center",
                     justify_content="center",
                     height="60px",
+                    style={
+                        "@media screen and (max-width: 600px)": {
+                            "height": "auto",
+                            "min_height": "92px",
+                            "padding": "0.75em 1em",
+                            "flex_wrap": "wrap",
+                            "row_gap": "0.25em",
+                        }
+                    },
                 ),
 
                 rx.center(
@@ -650,7 +705,8 @@ def index() -> rx.Component:
                                             "font_family": "'Inter', sans-serif",
                                             "font_weight": "700",
                                             "color": "#ffffff",
-                                            "text_transform": "uppercase"
+                                            "text_transform": "uppercase",
+                                            "overflow_wrap": "anywhere",
                                         }
                                     ),
                                     background_color="#6aaa64",
@@ -699,7 +755,8 @@ def index() -> rx.Component:
                                             "font_family": "'Inter', sans-serif",
                                             "font_weight": "800",
                                             "color": "#1a1a1b",
-                                            "text_transform": "uppercase"
+                                            "text_transform": "uppercase",
+                                            "overflow_wrap": "anywhere",
                                         }
                                     ),
                                     padding="0.2em 0",
@@ -764,7 +821,15 @@ def index() -> rx.Component:
                             width="100%",
                             align="center",
                             spacing="8",
-                            padding_top="4em"
+                            padding_top="4em",
+                            padding_x="1em",
+                            style={
+                                "max_width": "680px",
+                                "@media screen and (max-width: 600px)": {
+                                    "padding_top": "2em",
+                                    "spacing": "5",
+                                }
+                            }
                         ),
                         rx.vstack(
                             rx.cond(
